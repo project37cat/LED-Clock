@@ -13,16 +13,6 @@
 __CONFIG(1, RCIO );
 __CONFIG(2, BORDIS & WDTDIS );
 
-// stdint
-typedef unsigned int uint16_t;
-typedef unsigned char uint8_t;
-
-
-#define TMR0_LOAD 64285
-#define TMR1_LOAD 32768
-
-#define LED_DOTS1 ledbuff[3]
-#define LED_DOTS2 ledbuff[5]
 
 // bicolor LED
 #define LED_PIN  TRISD6=0; TRISD7=0
@@ -37,20 +27,28 @@ typedef unsigned char uint8_t;
 #define BUT_DEB  5
 
 
+#define TMR0_LOAD 64285
+#define TMR1_LOAD 32768
+
+#define LED_DOTS1 ledbuff[3]
+#define LED_DOTS2 ledbuff[5]
+
+
+// flags
+bit scrflag; //screen refresh
+bit showsec; //show seconds
+bit buthold; //hold button
+
+char buff[8]; //string buffer
+
 uint8_t timesec; //time counters
 uint8_t timemin;
 uint8_t timehrs;
 
-uint8_t scrflag; //screen refresh flag
+uint8_t setmode; //settings mode
 
 uint8_t butstat; //button state
-uint8_t buthold; //hold button flag
 uint8_t butcnt; //button counter
-
-uint8_t setmode; //settings mode
-uint8_t showsec; //show seconds flag
-
-char buff[8];
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,7 +108,7 @@ T0CON=0b10010011; //prescaler 011 - 1:16  Fosc/4=2000, 2000/16=125kHz
 TMR0=TMR0_LOAD; //preload
 TMR0IE=1; //timer0 overflow intterrupt enable
 
-T1CON=0b1111; //T1OSCEN=1; T1SYNC=1; TMR1CS=1; TMR1ON=1; //external 32.768kHz crystal oscillator
+T1CON=0b1111; //T1OSCEN=1; T1SYNC=1; TMR1CS=1; TMR1ON=1; //external 32.768kHz crystal
 TMR1=TMR1_LOAD; //preload 32768
 TMR1IE=1;  //timer1 overflow intterrupt enable
 
@@ -133,7 +131,7 @@ while(1)
 			switch(setmode)
 				{
 				case 0: //show the seconds
-					if(++showsec>1) showsec=0;
+					showsec=!showsec;
 					break;
 					
 				case 1: //change the hours
@@ -161,18 +159,18 @@ while(1)
 	
 	if(scrflag==0) //refresh display
 		{
+		led_clear();		
 		LED_DOTS1=1;
 		
 		if(setmode)
 			{
-			LED_BLU; //LED indicator blue color
+			LED_BLU;
 			sprintf(buff,"%01u",setmode);
 			led_print(1,buff); //print the number of settings mode
 			}
 		else
 			{
-			LED_RED;//LED indicator red color
-			led_print(1," ");
+			LED_RED;
 			}
 		
 		sprintf(buff,"%02u%02u",timehrs,timemin);	
@@ -187,11 +185,9 @@ while(1)
 		else
 			{
 			LED_DOTS2=0;
-			led_print(6,"  ");
 			}
-
-		led_update();
 		
+		led_update();		
 		scrflag=1;
 		}
 	}

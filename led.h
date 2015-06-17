@@ -1,4 +1,4 @@
-// PT6961 display library v3  // toxcat 2015 copyleft  // HI-TECH C compiler
+// PT6961 display library v3a  // toxcat 2015 copyleft  // HI-TECH C compiler
 
 
 #define _XTAL_FREQ 8000000 //for delay functions
@@ -25,8 +25,9 @@ typedef unsigned char uint8_t; //stdint
 
 char ledbuff[14]; //display buffer
 
-const uint8_t ce=0b1000000; //"-"
+
 const uint8_t cn=0b0000000; //space
+const uint8_t ce=0b1111001; //"E"
 const uint8_t c0=0b0111111; //"0"
 const uint8_t c1=0b0000110; //"1"
 const uint8_t c2=0b1110011; //"2"
@@ -89,12 +90,12 @@ delay_ms(200);
 led_comm(0b01000000); //command 2  //b2 0 - increment address  //b1..b0 00 - data write mode
 
 STB=0;
-led_data(0b11000000); //command 3  //b3..b0 - set RAM address 0x00
+led_data(0b11000000); //command 3  //b3..b0 - set RAM address 0
 for(uint8_t i=0; i<14; i++) led_data(0); //clear the Display RAM (clear screen)
 STB=1;
 
-led_comm(0b00000011); //command 1  //b0..b1 display mode (11 - 7 digits, 11 segments)
-led_comm(0b10000011); //command 4  //b3 - display ON/OFF  //b0..b2 dimmer (brightness)
+led_comm(0b00000011); //command 1  //b1..b0 display mode (11 - 7 digits, 11 segments)
+led_comm(0b10000011); //command 4  //b3 - display ON/OFF  //b2..b0 dimmer (brightness)
 led_comm(0b00000011); //command 1
 led_comm(0b10001011); //command 4  //display ON
 }
@@ -118,7 +119,7 @@ switch(sign) //select a character code
 	case 55: tmp=c7; break; //"7"
 	case 56: tmp=c8; break; //"8"
 	case 57: tmp=c9; break; //"9"
-	default: tmp=ce; break; //dash if unsupported symbol
+	default: tmp=ce; break; //"E" if unsupported symbol
 	}
 
 for(uint8_t i=0; i<14; i=i+2) //send code in buffer
@@ -131,7 +132,14 @@ for(uint8_t i=0; i<14; i=i+2) //send code in buffer
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-led_print(uint8_t pos, const char *str) //print a string  //position 1..7
+void led_clear(void)
+{
+for(uint8_t i=0; i<14; i++) ledbuff[i]=0;
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void led_print(uint8_t pos, const char *str) //print a string  //position 1..7
 {
 for(;*str;) led_digit(pos++,*str++);
 }
