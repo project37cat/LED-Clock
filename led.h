@@ -1,4 +1,4 @@
-// PT6961 display library v3a  // toxcat 2015 copyleft  // HI-TECH C compiler
+// PT6961 display library v3c  // toxcat 2015 copyleft  // HI-TECH C compiler
 
 
 #define _XTAL_FREQ 8000000 //for delay functions
@@ -25,8 +25,11 @@ typedef unsigned char uint8_t; //stdint
 
 char ledbuff[14]; //display buffer
 
+uint8_t leddimm=2; //brightness 0..7
+
 
 const uint8_t cn=0b0000000; //space
+const uint8_t cm=0b1000000; //"-"
 const uint8_t ce=0b1111001; //"E"
 const uint8_t c0=0b0111111; //"0"
 const uint8_t c1=0b0000110; //"1"
@@ -41,9 +44,9 @@ const uint8_t c9=0b1111110; //"9"
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void delay_ms(uint8_t val)
+void delay_250(void) //delay 250ms
 {
-while(val--) __delay_ms(1);
+for(uint8_t k=0; k<250; k++) __delay_ms(1);
 }
 
 
@@ -83,7 +86,7 @@ DAT=0;
 CLK=1;
 STB=1;
 
-delay_ms(200);
+delay_250();
 
 /* PT6961 initial setting */
 
@@ -91,13 +94,16 @@ led_comm(0b01000000); //command 2  //b2 0 - increment address  //b1..b0 00 - dat
 
 STB=0;
 led_data(0b11000000); //command 3  //b3..b0 - set RAM address 0
-for(uint8_t i=0; i<14; i++) led_data(0); //clear the Display RAM (clear screen)
+for(uint8_t i=0; i<14; i++) led_data(0xff); //write in the Display RAM - to light all segments
 STB=1;
 
 led_comm(0b00000011); //command 1  //b1..b0 display mode (11 - 7 digits, 11 segments)
-led_comm(0b10000011); //command 4  //b3 - display ON/OFF  //b2..b0 dimmer (brightness)
+led_comm(0b10000000|leddimm); //command 4  //b3 - display ON/OFF  //b2..b0 dimmer (brightness)
 led_comm(0b00000011); //command 1
-led_comm(0b10001011); //command 4  //display ON
+led_comm(0b10001000|leddimm); //command 4  //display ON
+
+delay_250();
+delay_250();
 }
 
 
@@ -108,7 +114,8 @@ uint8_t tmp=0;
 
 switch(sign) //select a character code
 	{
-	case 32: tmp=cn; break; //space
+	case 32: tmp=cn; break; //" " space
+	case 45: tmp=cm; break; //"-" minus
 	case 48: tmp=c0; break; //"0"
 	case 49: tmp=c1; break; //"1"
 	case 50: tmp=c2; break; //"2"
@@ -132,7 +139,7 @@ for(uint8_t i=0; i<14; i=i+2) //send code in buffer
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void led_clear(void)
+void led_clear(void) //clear buffer
 {
 for(uint8_t i=0; i<14; i++) ledbuff[i]=0;
 }
@@ -146,15 +153,15 @@ for(;*str;) led_digit(pos++,*str++);
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void led_update(void)
+void led_update(void) //refresh screen and brightness
 {
 led_comm(0b01000000); //command 2
 
 STB=0;
 led_data(0b11000000); //command 3
-for(uint8_t i=0; i<14; i++) led_data(ledbuff[i]); //send buffer to display
+for(uint8_t i=0; i<14; i++) led_data(ledbuff[i]); //write buffer to Display RAM
 STB=1;
 
 led_comm(0b00000011); //command 1
-led_comm(0b10001011); //command 4
+led_comm(0b10001000|leddimm); //command 4
 }

@@ -1,6 +1,7 @@
-// LED clock
-//
+// LED Clock
 // PIC18LF4320
+// MPLAB IDE
+// HI-TECH C compiler
 
 
 #include <htc.h>
@@ -12,6 +13,9 @@
 // configuration bits
 __CONFIG(1, RCIO );
 __CONFIG(2, BORDIS & WDTDIS );
+
+
+typedef unsigned char uint8_t; //stdint
 
 
 // bicolor LED
@@ -26,18 +30,16 @@ __CONFIG(2, BORDIS & WDTDIS );
 #define BUT_HLD  100
 #define BUT_DEB  5
 
+// active buzzer
+#define BUZZ_PIN  TRISD5=0
+#define BUZZER    RD5
 
-#define TMR0_LOAD 64285
+#define TMR0_LOAD 64286
 #define TMR1_LOAD 32768
 
 #define LED_DOTS1 ledbuff[3]
 #define LED_DOTS2 ledbuff[5]
 
-
-// flags
-bit scrflag; //screen refresh
-bit showsec; //show seconds
-bit buthold; //hold button
 
 char buff[8]; //string buffer
 
@@ -47,13 +49,25 @@ uint8_t timehrs;
 
 uint8_t setmode; //settings mode
 
-uint8_t butstat; //button state
-uint8_t butcnt; //button counter
+bit     scrflag; //screen refresh flag //0 - need refresh
+bit     showsec; //show seconds flag //0 - show seconds
+
+bit     buthold; //button hold flag
+uint8_t butstat; //button state //2 - long press, 1 - short press, 0 - not pressed
+uint8_t butcnt; //counter for button
+
+uint8_t buzzcnt; //counter for buzzer
+
+bit     alarmenable; //alarm clock turned on
+bit     alarmactive; //alarm signal is active
+uint8_t alrmhrs; //alarm time
+uint8_t alrmmin;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void interrupt handler(void)
 {
+/*****************************************************************************/	
 if(TMR0IF) //timer 0 overflow interrupt //100Hz
 	{
 	TMR0IF=0;
@@ -64,18 +78,39 @@ if(TMR0IF) //timer 0 overflow interrupt //100Hz
 		if(++butcnt>=BUT_HLD)
 			{
 			butcnt=0;
-			butstat=2;
+			butstat=2; //long press
 			buthold=1;
 			}
 		}
 	else
 		{
-		if(butcnt>=BUT_DEB && buthold==0) butstat=1;
+		if(butcnt>=BUT_DEB && buthold==0) butstat=1; //short press
 		buthold=0;
 		butcnt=0;
 		}
+	
+	if(alarmenable && timehrs==alrmhrs && timemin==alrmmin) alarmactive=1; //alarm
+	
+	if(alarmactive) //alarm signal
+		{
+		if(BUZZER==0 && buzzcnt==0) BUZZER=1;
+			buzzcnt++;
+			if(buzzcnt==30) BUZZER=0;
+			if(buzzcnt==80) buzzcnt=0;
+		
+		if(alarmenable && butstat) //disable alarm
+			{
+			BUZZER=0;
+			buzzcnt=0;
+			alarmenable=0;
+			alarmactive=0;
+			butstat=0;
+			scrflag=0;
+			}
+		}
 	}
 
+/*****************************************************************************/	
 if(TMR1IF) //timer 1 overflow //1Hz
 	{
 	TMR1IF=0;
@@ -101,28 +136,31 @@ void main(void)
 {
 IRCF2=1; IRCF1=1; IRCF0=1; //8MHz internal RC oscillator
 
+/* init. pins */
 ADCON1=0b1111; //disable analog inputs
+BUT_PIN;
+LED_PIN;
+LED_OFF;
+BUZZ_PIN;
+BUZZER=0;
 
 //TMR0ON//T08BIT//T0CS//T0SE//PSA//T0PS2:T0PS0
 T0CON=0b10010011; //prescaler 011 - 1:16  Fosc/4=2000, 2000/16=125kHz
-TMR0=TMR0_LOAD; //preload
+TMR0=TMR0_LOAD; //preload  //65536-64286=1250 125k/1250=100Hz
 TMR0IE=1; //timer0 overflow intterrupt enable
 
 T1CON=0b1111; //T1OSCEN=1; T1SYNC=1; TMR1CS=1; TMR1ON=1; //external 32.768kHz crystal
-TMR1=TMR1_LOAD; //preload 32768
-TMR1IE=1;  //timer1 overflow intterrupt enable
+TMR1=TMR1_LOAD; //preload  //65536-32768=32768, 32.768kHz/32768=1Hz
+TMR1IE=1; //timer1 overflow intterrupt enable
 
-GIE=1; //global interrupt enable
+GIE=1; //enable interrupts
 PEIE=1;
 
-BUT_PIN;
-LED_PIN;
-
-led_init();
+led_init(); //750ms
 
 while(1)
 	{
-	switch(butstat) //button state
+	switch(butstat) //check the button state
 		{
 		case 1: //a short press of the button
 			scrflag=0;
@@ -145,26 +183,40 @@ while(1)
 				case 3: //reset seconds
 					timesec=0;
 					break;
+					
+				case 4: //change the brightness
+					if(++leddimm>3) leddimm=0;
+					break;
+										
+				case 5: //set alarm
+					if(++alrmhrs>23) alrmhrs=0;
+					break;
+				
+				case 6: //set alarm
+					if(++alrmmin>59) alrmmin=0;
+					break;
+				
+				case 7: //alarm on/off
+					alarmenable=!alarmenable;
+					break;
 				}
 			break;
 			
 		case 2: //long press
 			scrflag=0;
 			butstat=0;
-			
-			if(++setmode>3) setmode=0; //change the settings mode
-			
+			if(++setmode>7) setmode=0; //change the settings mode
 			break;
 		}
 	
-	if(scrflag==0) //refresh display
+	if(scrflag==0) //refresh the screen
 		{
-		led_clear();		
-		LED_DOTS1=1;
+		led_clear();
 		
 		if(setmode)
 			{
 			LED_BLU;
+			ledbuff[11]=1;
 			sprintf(buff,"%01u",setmode);
 			led_print(1,buff); //print the number of settings mode
 			}
@@ -173,21 +225,40 @@ while(1)
 			LED_RED;
 			}
 		
-		sprintf(buff,"%02u%02u",timehrs,timemin);	
-		led_print(2,buff); //print hours and minutes
-		
-		if(showsec || setmode)
+		switch(setmode)
 			{
-			sprintf(buff,"%02u",timesec);
-			led_print(6,buff); //print seconds	
-			LED_DOTS2=1;
-			}
-		else
-			{
-			LED_DOTS2=0;
-			}
+			case 0: //screen in normal mode
+			case 1:	//settings mode - 1, set hours
+			case 2: //settings mode - 2, set minutes
+			case 3: //settings mode - 3, set seconds
+				LED_DOTS1=1;
+				sprintf(buff,"%02u%02u",timehrs,timemin);
+				led_print(2,buff); //print hours and minutes
+				if(!showsec || setmode)
+					{
+					LED_DOTS2=1;
+					sprintf(buff,"%02u",timesec);
+					led_print(6,buff); //print seconds
+					}
+				break;
+									
+			case 4: //settings mode - 4, set brightness
+				sprintf(buff,"%01u",leddimm);
+				led_print(7,buff);
+				break;
+					
+			case 5: //settings mode - 5, set alarm
+			case 6: //settings mode - 6
+			case 7: //settings mode - 7
+				LED_DOTS2=1;
+				sprintf(buff,"%02u%02u",alrmhrs,alrmmin);
+				led_print(4,buff);
+				break;
+				}
 		
-		led_update();		
+		if(alarmenable) ledbuff[0]|=0x01; //alarm indicaror
+		
+		led_update();
 		scrflag=1;
 		}
 	}
