@@ -1,7 +1,6 @@
-// LED Clock
-// PIC18LF4320
-// MPLAB IDE
-// HI-TECH C compiler
+// LED Clock  (PIC18LF4320 + PT6961)
+// Compiler: HI-TECH C PRO for the PIC18 MCU Family  V9.63PL3
+// 21-oct-15 Copyleft toxcat
 
 
 #include <htc.h>
@@ -11,18 +10,18 @@
 
 
 // configuration bits
-__CONFIG(1, RCIO );
-__CONFIG(2, BORDIS & WDTDIS );
+__CONFIG(1, RCIO );  //internall RC oscillator
+__CONFIG(2, BORDIS & WDTDIS );  //disable Brown-out Reset  //disable  Watchdog Timer
 
 
 typedef unsigned char uint8_t; //stdint
 
 
 // bicolor LED
-#define LED_PIN  TRISD6=0; TRISD7=0
-#define LED_BLU  RD6=0; RD7=1
-#define LED_RED  RD6=1; RD7=0
-#define LED_OFF  RD6=0; RD7=0
+#define LED_PIN  {TRISD6=0; TRISD7=0;}
+#define LED_BLU  {RD6=0; RD7=1;}
+#define LED_RED  {RD6=1; RD7=0;}
+#define LED_OFF  {RD6=0; RD7=0;}
 
 // button
 #define BUT_PIN  TRISC7=1
@@ -35,7 +34,8 @@ typedef unsigned char uint8_t; //stdint
 #define BUZZER    RD5
 
 #define TMR0_LOAD 64286
-#define TMR1_LOAD 32768
+//#define TMR1_LOAD 32768
+#define TMR1_LOAD 32770
 
 #define LED_DOTS1 ledbuff[3]
 #define LED_DOTS2 ledbuff[5]
@@ -52,6 +52,10 @@ uint8_t setmode; //settings mode
 bit     scrflag; //screen refresh flag //0 - need refresh
 bit     showsec; //show seconds flag //0 - show seconds
 
+uint8_t blinkcnt; //counter for blink
+bit     blinkstart; //start counter flag
+bit     blinkflag; //flag for blink
+
 bit     buthold; //button hold flag
 uint8_t butstat; //button state //2 - long press, 1 - short press, 0 - not pressed
 uint8_t butcnt; //counter for button
@@ -67,11 +71,22 @@ uint8_t alrmmin;
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void interrupt handler(void)
 {
-/*****************************************************************************/	
+/*****************************************************************************/
 if(TMR0IF) //timer 0 overflow interrupt //100Hz
 	{
 	TMR0IF=0;
 	TMR0=TMR0_LOAD;
+	
+	if(blinkstart)
+		{
+		if(++blinkcnt>=50)
+			{
+			blinkcnt=0;
+			blinkstart=0;
+			blinkflag=0;
+			scrflag=0;
+			}
+		}	
 	
 	if(BUTTON==0) //if button is pressed
 		{
@@ -110,13 +125,15 @@ if(TMR0IF) //timer 0 overflow interrupt //100Hz
 		}
 	}
 
-/*****************************************************************************/	
+/*****************************************************************************/
 if(TMR1IF) //timer 1 overflow //1Hz
 	{
 	TMR1IF=0;
 	TMR1=TMR1_LOAD;
 	
 	scrflag=0;
+	
+	blinkstart=1;
 	
 	if(++timesec>59) //seconds
 		{
@@ -156,7 +173,7 @@ TMR1IE=1; //timer1 overflow intterrupt enable
 GIE=1; //enable interrupts
 PEIE=1;
 
-led_init(); //750ms
+led_init();
 
 while(1)
 	{
@@ -165,6 +182,7 @@ while(1)
 		case 1: //a short press of the button
 			scrflag=0;
 			butstat=0;
+			blinkflag=0;
 			
 			switch(setmode)
 				{
@@ -204,7 +222,9 @@ while(1)
 			
 		case 2: //long press
 			scrflag=0;
-			butstat=0;
+			butstat=0;	
+			blinkflag=1;
+			
 			if(++setmode>7) setmode=0; //change the settings mode
 			break;
 		}
@@ -216,43 +236,116 @@ while(1)
 		if(setmode)
 			{
 			LED_BLU;
-			ledbuff[11]=1;
+			ledbuff[11]=1; //settings mode indicator
 			sprintf(buff,"%01u",setmode);
 			led_print(1,buff); //print the number of settings mode
 			}
-		else
-			{
-			LED_RED;
-			}
+		else LED_RED;
 		
 		switch(setmode)
 			{
+			/*****************************************************************************/
 			case 0: //screen in normal mode
-			case 1:	//settings mode - 1, set hours
-			case 2: //settings mode - 2, set minutes
-			case 3: //settings mode - 3, set seconds
-				LED_DOTS1=1;
 				sprintf(buff,"%02u%02u",timehrs,timemin);
 				led_print(2,buff); //print hours and minutes
-				if(!showsec || setmode)
+				
+				if(!showsec) //show seconds
 					{
-					LED_DOTS2=1;
+					LED_DOTS1=1; //dots 1 ON
+					LED_DOTS2=1; //dots 2 ON
 					sprintf(buff,"%02u",timesec);
 					led_print(6,buff); //print seconds
 					}
+				else
+					if(!blinkflag) //blink dots 1
+						{
+						LED_DOTS1=1; //dots 1 ON
+						blinkflag=1;
+						}			
 				break;
-									
+			/*****************************************************************************/			
+			case 1:	//settings mode - 1, set hours
+				sprintf(buff,"%02u%02u",timemin,timesec);	
+				led_print(4,buff);
+				
+				if(!blinkflag) //blink hours
+					{			
+					sprintf(buff,"%02u",timehrs);	
+					led_print(2,buff); //print hours
+					blinkflag=1;
+					}
+					
+				LED_DOTS1=1; //dots 1 ON
+				LED_DOTS2=1; //dots 2 ON
+				break;
+			/*****************************************************************************/	
+			case 2: //settings mode - 2, set minutes
+				sprintf(buff,"%02u  %02u",timehrs,timesec);	
+				led_print(2,buff);
+				
+				if(!blinkflag) //blink min.
+					{			
+					sprintf(buff,"%02u",timemin);	
+					led_print(4,buff); //print min.
+					blinkflag=1;
+					}
+					
+				LED_DOTS1=1; //dots 1 ON
+				LED_DOTS2=1; //dots 2 ON	
+				break;
+			/*****************************************************************************/
+			case 3: //settings mode - 3, set seconds
+				sprintf(buff,"%02u%02u",timemin,timehrs);	
+				led_print(2,buff);
+				
+				if(!blinkflag) //blink sec.
+					{			
+					sprintf(buff,"%02u",timesec);	
+					led_print(6,buff); //print sec.
+					blinkflag=1;
+					}
+					
+				LED_DOTS1=1; //dots 1 ON
+				LED_DOTS2=1; //dots 2 ON	
+				break;
+			/*****************************************************************************/								
 			case 4: //settings mode - 4, set brightness
 				sprintf(buff,"%01u",leddimm);
 				led_print(7,buff);
 				break;
-					
-			case 5: //settings mode - 5, set alarm
-			case 6: //settings mode - 6
-			case 7: //settings mode - 7
+			/*****************************************************************************/		
+			case 5: //settings mode - 5, set alarm hours
+				sprintf(buff,"%02u",alrmmin); //print minutes
+				led_print(6,buff);
+				
+				if(!blinkflag) //blink hours
+					{			
+					sprintf(buff,"%02u",alrmhrs);	
+					led_print(4,buff); //print hours
+					blinkflag=1;
+					}
+				
 				LED_DOTS2=1;
+				break;
+			/*****************************************************************************/
+			case 6: //settings mode - 6, set alarm minutes
+				sprintf(buff,"%02u",alrmhrs); //print hours
+				led_print(4,buff);
+				
+				if(!blinkflag) //blink min.
+					{			
+					sprintf(buff,"%02u",alrmmin);	
+					led_print(6,buff); //print min.
+					blinkflag=1;
+					}
+				
+				LED_DOTS2=1;
+				break;
+			/*****************************************************************************/
+			case 7: //settings mode - 7, set alarm ON/OFF
 				sprintf(buff,"%02u%02u",alrmhrs,alrmmin);
 				led_print(4,buff);
+				LED_DOTS2=1;
 				break;
 				}
 		

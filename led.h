@@ -1,4 +1,4 @@
-// PT6961 display library v3c  // toxcat 2015 copyleft  // HI-TECH C compiler
+// PT6961 display library v3d  // toxcat 2015 copyleft  // HI-TECH C compiler
 
 
 #define _XTAL_FREQ 8000000 //for delay functions
@@ -21,7 +21,7 @@
 
 
 typedef unsigned char uint8_t; //stdint
-
+typedef unsigned int uint16_t;
 
 char ledbuff[14]; //display buffer
 
@@ -44,9 +44,9 @@ const uint8_t c9=0b1111110; //"9"
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void delay_250(void) //delay 250ms
+void delay_ms(uint16_t del) //delay
 {
-for(uint8_t k=0; k<250; k++) __delay_ms(1);
+while(del-->0) __delay_ms(1);
 }
 
 
@@ -86,7 +86,7 @@ DAT=0;
 CLK=1;
 STB=1;
 
-delay_250();
+delay_ms(200);
 
 /* PT6961 initial setting */
 
@@ -102,8 +102,7 @@ led_comm(0b10000000|leddimm); //command 4  //b3 - display ON/OFF  //b2..b0 dimme
 led_comm(0b00000011); //command 1
 led_comm(0b10001000|leddimm); //command 4  //display ON
 
-delay_250();
-delay_250();
+delay_ms(1400);
 }
 
 
