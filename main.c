@@ -295,7 +295,7 @@ while(1)
 				break;
 			/*****************************************************************************/
 			case 3: //settings mode - 3, set seconds
-				sprintf(buff,"%02u%02u",timemin,timehrs);	
+				sprintf(buff,"%02u%02u",timehrs,timemin);	
 				led_print(2,buff);
 				
 				if(!blinkflag) //blink sec.
