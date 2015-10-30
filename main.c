@@ -34,8 +34,7 @@ typedef unsigned char uint8_t; //stdint
 #define BUZZER    RD5
 
 #define TMR0_LOAD 64286
-//#define TMR1_LOAD 32768
-#define TMR1_LOAD 32770
+#define TMR1_LOAD 32768
 
 #define LED_DOTS1 ledbuff[3]
 #define LED_DOTS2 ledbuff[5]
